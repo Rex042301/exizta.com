@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "604247727598",
+    "project_id": "gen-lang-client-0377094028",
+    "storage_bucket": "gen-lang-client-0377094028.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:604247727598:android:e6a278e24c72f4baea42ff",
+        "android_client_info": {
+          "package_name": "com.example.aiper"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCbxgWC3vq7N5P61zhQkPnzi5VEi8ZWJ9g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:604247727598:android:3ae1c23d7453de5cea42ff",
+        "android_client_info": {
+          "package_name": "com.example.exizta"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCbxgWC3vq7N5P61zhQkPnzi5VEi8ZWJ9g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

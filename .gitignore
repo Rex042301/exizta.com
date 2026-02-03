@@ -1,0 +1,47 @@
+# Flutter/Dart/Pub
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub/
+build/
+coverage/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# VS Code
+.vscode/
+
+# OS files
+.DS_Store
+*.log
+*.lock
+*.swp
+
+# Flutter Web
+web/.dart_tool/
+web/build/
+
+# iOS
+ios/Flutter/.last_build_id
+ios/Flutter/App.framework
+ios/Flutter/Flutter.framework
+ios/Flutter/Generated.xcconfig
+ios/Flutter/ephemeral
+ios/Flutter/flutter_assets/
+ios/Runner/GeneratedPluginRegistrant.*
+
+# macOS
+macos/Flutter/ephemeral
+macos/Flutter/GeneratedPluginRegistrant.swift
+macos/Pods/
+
+# Windows
+windows/flutter/generated_plugin_registrant.*
+
+# Linux
+linux/flutter/generated_plugin_registrant.*
