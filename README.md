@@ -1,22 +1,20 @@
-<<<<<<< HEAD
-# aiper
+# exizta.com
 
-A new Flutter project.
+A Flutter web and mobile application project deployed using GitHub Pages.
 
 ## Getting Started
 
-This project is a starting point for a Flutter application.
+This project is a starting point for a Flutter application. Follow these steps if this is your first Flutter project:
 
-A few resources to get you started if this is your first Flutter project:
+### Prerequisites
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+- Install [Flutter SDK](https://flutter.dev/docs/get-started/install)
+- Install [VS Code](https://code.visualstudio.com/) or another IDE
+- Set up your device or emulator for testing
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
- samples, guidance on mobile development, and a full API reference.
-=======
-# Flutter Web App
+### Installation
 
-This is a Flutter web application deployed using GitHub Pages.
->>>>>>> 8a96faa296fe6f4a1310ddb1c2267725b1fb1523
+1. Clone the repository:
+
+```bash
+git clone https://github.com/Rex042301/exizta.com.git
