@@ -6,7 +6,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:vibration/vibration.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-// Pages
+// Pages - Siguraduhin na tama ang import paths mo
 import 'mapp_page.dart';
 import 'admin_home.dart';
 import 'admin_services.dart';
@@ -28,9 +28,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
   late AnimationController _shimmerController;
   bool _isSirenPlaying = false;
   StreamSubscription<QuerySnapshot>? _sosSubscription;
-  final Map<String, Timer> _vibrationTimers = {}; // per-user vibration timers
+  final Map<String, Timer> _vibrationTimers = {};
 
-  // Screens
   List<Widget> get _screens => [
     AdminHome(onNavigate: (index) => _onItemTapped(index)),
     const AdminMap(),
@@ -47,7 +46,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
       vsync: this,
       duration: const Duration(seconds: 3),
     )..repeat();
-
     _startGlobalSosListener();
   }
 
@@ -60,7 +58,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
     super.dispose();
   }
 
-  // ---------------- SOS LISTENER ----------------
   void _startGlobalSosListener() {
     _sosSubscription = FirebaseFirestore.instance
         .collection('sos_triggers')
@@ -68,8 +65,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
         .snapshots()
         .listen((snapshot) async {
       final activeSOS = snapshot.docs
-          .where((doc) =>
-      (doc.data() as Map<String, dynamic>)['acknowledged'] == false)
+          .where((doc) => (doc.data() as Map<String, dynamic>)['acknowledged'] == false)
           .toList();
 
       if (activeSOS.isEmpty) {
@@ -80,56 +76,36 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
           await _audioPlayer.setReleaseMode(ReleaseMode.loop);
           await _audioPlayer.play(AssetSource('sounds/sirens.mp3'));
         }
-
-        // Start vibration per active user
         for (var doc in activeSOS) {
           final docId = doc.id;
-          if (!_vibrationTimers.containsKey(docId) &&
-              await Vibration.hasVibrator() == true) {
-            _vibrationTimers[docId] =
-                Timer.periodic(const Duration(seconds: 1), (_) {
-                  Vibration.vibrate(duration: 500);
-                });
+          if (!_vibrationTimers.containsKey(docId) && await Vibration.hasVibrator() == true) {
+            _vibrationTimers[docId] = Timer.periodic(const Duration(seconds: 1), (_) {
+              Vibration.vibrate(duration: 500);
+            });
           }
         }
-
-        // Cancel vibration for acknowledged users
-        final ackedDocs = snapshot.docs
-            .where((doc) =>
-        (doc.data() as Map<String, dynamic>)['acknowledged'] == true)
-            .toList();
-        for (var doc in ackedDocs) {
-          final docId = doc.id;
-          _vibrationTimers[docId]?.cancel();
-          _vibrationTimers.remove(docId);
-        }
       }
-
-      if (mounted) setState(() {}); // Refresh UI
+      if (mounted) setState(() {});
     });
   }
 
   Future<void> _stopAllSirens() async {
     _isSirenPlaying = false;
-    _vibrationTimers.values.forEach((timer) => timer.cancel());
+    for (var timer in _vibrationTimers.values) {
+      timer.cancel();
+    }
     _vibrationTimers.clear();
     await _audioPlayer.stop();
     if (mounted) setState(() {});
   }
 
-  // ---------------- CALL FUNCTION ----------------
   Future<void> _callUser(String phoneNumber) async {
     final Uri callUri = Uri(scheme: 'tel', path: phoneNumber);
     if (await canLaunchUrl(callUri)) {
       await launchUrl(callUri);
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cannot make a call on this device')),
-      );
     }
   }
 
-  // ---------------- UI ----------------
   void _onItemTapped(int index) {
     setState(() => _selectedIndex = index);
   }
@@ -138,6 +114,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
+      extendBody: true, // Hayaan ang body na mag-extend sa ilalim ng navbar
       body: Stack(
         children: [
           _buildDynamicBackground(),
@@ -148,33 +125,32 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
                 children: [
                   if (isDesktop) _buildNavigationRail(),
                   Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.only(bottom: isDesktop ? 0 : 80),
-                      child: IndexedStack(
-                        index: _selectedIndex,
-                        children: _screens,
-                      ),
+                    child: IndexedStack(
+                      index: _selectedIndex,
+                      children: _screens,
                     ),
                   ),
                 ],
               );
             },
           ),
+          // FLOATING NAVBAR (Mobile Only Logic built-in)
           Positioned(
-            bottom: 20,
-            left: 15,
-            right: 15,
+            bottom: 25,
+            left: 0,
+            right: 0,
             child: LayoutBuilder(
               builder: (context, constraints) {
                 if (constraints.maxWidth > 800) return const SizedBox.shrink();
-                return _buildGlowingGlassNavbar();
+                return _buildGlowingGlassNavbar(constraints.maxWidth);
               },
             ),
           ),
+          // SOS OVERLAY
           Positioned(
-            bottom: 90,
-            left: 15,
-            right: 15,
+            bottom: 115,
+            left: 20,
+            right: 20,
             child: _buildCompactSosOverlay(),
           ),
         ],
@@ -187,14 +163,14 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
       children: [
         Container(color: Colors.black),
         Positioned(
-          top: -100,
+          top: -150,
           right: -50,
-          child: _buildGlowOrb(Colors.blueAccent.withOpacity(0.1), 300),
+          child: _buildGlowOrb(Colors.blueAccent.withOpacity(0.12), 400),
         ),
         Positioned(
-          bottom: 100,
+          bottom: -100,
           left: -100,
-          child: _buildGlowOrb(Colors.indigo.withOpacity(0.08), 400),
+          child: _buildGlowOrb(Colors.indigo.withOpacity(0.1), 500),
         ),
       ],
     );
@@ -205,63 +181,81 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
       width: size,
       height: size,
       decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          boxShadow: [BoxShadow(color: color, blurRadius: 100, spreadRadius: 50)]),
+        shape: BoxShape.circle,
+        boxShadow: [BoxShadow(color: color, blurRadius: 100, spreadRadius: 50)],
+      ),
     );
   }
 
-  Widget _buildGlowingGlassNavbar() {
-    return AnimatedBuilder(
-      animation: _shimmerController,
-      builder: (context, child) {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(30),
+  Widget _buildGlowingGlassNavbar(double screenWidth) {
+    // Nag-aadjust ang lapad depende sa screen para hindi "stretched"
+    double navWidth = screenWidth > 500 ? 450 : screenWidth * 0.92;
+
+    return Center(
+      child: SizedBox(
+        width: navWidth,
+        height: 70,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(35),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
             child: Container(
-              height: 75,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(30),
-                border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
+                color: Colors.white.withOpacity(0.05), // Clear look
+                borderRadius: BorderRadius.circular(35),
+                border: Border.all(color: Colors.white.withOpacity(0.15), width: 1.2),
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _navItem(Icons.grid_view_rounded, "HOME", 0),
                   _navItem(Icons.map_rounded, "MAP", 1),
-                  _navItem(Icons.pending_actions_rounded, "PENDING", 2),
-                  _navItem(Icons.campaign_rounded, "UPDATE", 3),
-                  _navItem(Icons.person_rounded, "USER", 4),
+                  _navItem(Icons.pending_actions_rounded, "SERVICES", 2),
+                  _navItem(Icons.campaign_rounded, "UPDATES", 3),
+                  _navItem(Icons.person_rounded, "PROFILE", 4),
                 ],
               ),
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
   Widget _navItem(IconData icon, String label, int index) {
     bool isSelected = _selectedIndex == index;
-    return InkWell(
-      onTap: () => _onItemTapped(index),
-      splashColor: Colors.transparent,
-      highlightColor: Colors.transparent,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: isSelected ? Colors.blueAccent : Colors.white38, size: 26),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: TextStyle(
-              color: isSelected ? Colors.blueAccent : Colors.white24,
-              fontSize: 9,
-              fontWeight: FontWeight.w800,
+    return Expanded(
+      child: InkWell(
+        onTap: () => _onItemTapped(index),
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isSelected ? Colors.blueAccent.withOpacity(0.15) : Colors.transparent,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                color: isSelected ? Colors.blueAccent : Colors.white.withOpacity(0.4),
+                size: 24,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.blueAccent : Colors.white.withOpacity(0.3),
+                fontSize: 8,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -272,6 +266,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
       selectedIndex: _selectedIndex > 4 ? 0 : _selectedIndex,
       onDestinationSelected: _onItemTapped,
       labelType: NavigationRailLabelType.all,
+      unselectedIconTheme: const IconThemeData(color: Colors.white38),
+      selectedIconTheme: const IconThemeData(color: Colors.blueAccent),
       destinations: const [
         NavigationRailDestination(icon: Icon(Icons.grid_view_rounded), label: Text("Home")),
         NavigationRailDestination(icon: Icon(Icons.map_rounded), label: Text("Map")),
@@ -295,64 +291,37 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
         return ClipRRect(
           borderRadius: BorderRadius.circular(25),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.redAccent.withOpacity(0.15),
+                color: Colors.redAccent.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(25),
-                border: Border.all(color: Colors.white.withOpacity(0.2), width: 1.2),
+                border: Border.all(color: Colors.redAccent.withOpacity(0.2), width: 1.2),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: activeUsers.map((doc) {
                   final data = doc.data() as Map<String, dynamic>;
-                  final name = data['name'] ?? 'Unknown';
-                  final phone = data['phone'] ?? '';
-
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
+                  return ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                    leading: const CircleAvatar(
+                      backgroundColor: Colors.redAccent,
+                      child: Icon(Icons.warning_rounded, color: Colors.white, size: 20),
+                    ),
+                    title: Text(data['name'] ?? 'Unknown',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.warning_rounded, color: Colors.redAccent, size: 22),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            name,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
                         IconButton(
-                          icon: const Icon(Icons.call, color: Colors.greenAccent, size: 22),
-                          onPressed: phone.isNotEmpty ? () => _callUser(phone) : null,
+                          icon: const Icon(Icons.call, color: Colors.greenAccent),
+                          onPressed: () => _callUser(data['phone'] ?? ''),
                         ),
-                        TextButton(
-                          onPressed: () async {
-                            await FirebaseFirestore.instance
-                                .collection('sos_triggers')
-                                .doc(doc.id)
-                                .update({'acknowledged': true});
-                            _vibrationTimers[doc.id]?.cancel();
-                            _vibrationTimers.remove(doc.id);
-
-                            if (_vibrationTimers.isEmpty) await _stopAllSirens();
-                          },
-                          style: TextButton.styleFrom(
-                            backgroundColor: Colors.white.withOpacity(0.2),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
-                          ),
-                          child: const Text(
-                            "ACK",
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12),
-                          ),
+                        ElevatedButton(
+                          onPressed: () => FirebaseFirestore.instance.collection('sos_triggers').doc(doc.id).update({'acknowledged': true}),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.white12),
+                          child: const Text("ACK", style: TextStyle(color: Colors.white, fontSize: 10)),
                         ),
                       ],
                     ),

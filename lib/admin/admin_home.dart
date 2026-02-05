@@ -125,21 +125,21 @@ class _AdminHomeState extends State<AdminHome> with SingleTickerProviderStateMix
             boxShadow: [
               BoxShadow(
                 color: statusColor.withOpacity(0.08 * blink),
-                blurRadius: 15,
-                spreadRadius: 1,
+                blurRadius: 0,
+                spreadRadius: 2,
               ),
             ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(25),
+            borderRadius: BorderRadius.circular(15),
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+              filter: ImageFilter.blur(sigmaX: 100000, sigmaY: 100000),
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(25),
+                  borderRadius: BorderRadius.circular(15),
                   border: Border.all(
-                    color: statusColor.withOpacity(isBlinking ? (0.5 * blink) : 0.2),
+                    color: statusColor.withValues(alpha:isBlinking ? (0.5 * blink) : 0.2),
                     width: isBlinking ? 1.8 : 1.0,
                   ),
                   gradient: LinearGradient(
@@ -147,9 +147,9 @@ class _AdminHomeState extends State<AdminHome> with SingleTickerProviderStateMix
                     end: Alignment(-4.0 + (_shimmerController.value * 10), 1.2),
                     colors: [
                       Colors.transparent,
-                      statusColor.withOpacity(0.05),
-                      Colors.white.withOpacity(0.4),
-                      statusColor.withOpacity(0.05),
+                      statusColor.withValues(alpha: 0.05),
+                      Colors.white.withValues(alpha: 0.4),
+                      statusColor.withValues(alpha:0.05),
                       Colors.transparent,
                     ],
                     stops: const [0.0, 0.495, 0.5, 0.505, 1.0],
@@ -184,9 +184,9 @@ class _AdminHomeState extends State<AdminHome> with SingleTickerProviderStateMix
 
         Color cardColor;
         if (isEmergency) {
-          cardColor = hasUpdate ? Colors.redAccent : Colors.blueAccent;
+          cardColor = hasUpdate ? Colors.redAccent : Colors.white;
         } else {
-          cardColor = hasUpdate ? Colors.greenAccent : Colors.blueAccent;
+          cardColor = hasUpdate ? Colors.white : Colors.white;
         }
 
         return _glassContainer(
@@ -208,7 +208,7 @@ class _AdminHomeState extends State<AdminHome> with SingleTickerProviderStateMix
                 FittedBox(
                   child: Text(
                     title.toUpperCase(),
-                    style: TextStyle(color: cardColor.withOpacity(0.6), fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                    style: TextStyle(color: cardColor.withValues(alpha:0.0), fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                   ),
                 ),
               ],
