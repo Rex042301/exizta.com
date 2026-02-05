@@ -1,6 +1,8 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:ui';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class EvacuationPage extends StatefulWidget {
   const EvacuationPage({super.key});
@@ -9,282 +11,336 @@ class EvacuationPage extends StatefulWidget {
   State<EvacuationPage> createState() => _EvacuationPageState();
 }
 
-class _EvacuationPageState extends State<EvacuationPage> with SingleTickerProviderStateMixin {
-  late AnimationController _shimmerController;
-  final TextEditingController _titleController = TextEditingController();
-  final TextEditingController _rowFieldController = TextEditingController();
-  final TextEditingController _columnFieldController = TextEditingController();
+class _EvacuationPageState extends State<EvacuationPage> {
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _capacityController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
 
-  // Position variables for Moveable FAB
-  Offset _fabPosition = const Offset(0, 0);
-  bool _isFABInitialized = false;
+  String? userRole;
+  bool isLoading = true;
+  String searchQuery = "";
+  String selectedStatus = "Available";
 
   @override
   void initState() {
     super.initState();
-    _shimmerController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 3),
-    )..repeat();
+    _getUserRole();
   }
 
-  @override
-  void dispose() {
-    _shimmerController.dispose();
-    _titleController.dispose();
-    _rowFieldController.dispose();
-    _columnFieldController.dispose();
-    super.dispose();
-  }
-
-  // --- DELETE LOGIC ---
-  Future<void> _deletePost(String docId) async {
-    bool confirm = await showGeneralDialog<bool>(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: '',
-      barrierColor: Colors.black54,
-      pageBuilder: (context, anim1, anim2) {
-        return Center(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 40),
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.delete_forever, color: Colors.redAccent, size: 40),
-                    const SizedBox(height: 16),
-                    const Text("Delete Card?", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 24),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("CANCEL", style: TextStyle(color: Colors.white54))),
-                        const SizedBox(width: 10),
-                        ElevatedButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent.withOpacity(0.3)),
-                          child: const Text("DELETE"),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    ) ?? false;
-
-    if (confirm) await FirebaseFirestore.instance.collection('evacuation_plans').doc(docId).delete();
-  }
-
-  // --- SAVE & UPDATE ---
-  Future<void> _saveData({String? docId}) async {
-    if (_titleController.text.isEmpty) return;
-    final data = {
-      'title': _titleController.text,
-      'row_data': _rowFieldController.text,
-      'column_data': _columnFieldController.text,
-      'timestamp': FieldValue.serverTimestamp(),
-    };
-    if (docId == null) {
-      await FirebaseFirestore.instance.collection('evacuation_plans').add(data);
-    } else {
-      await FirebaseFirestore.instance.collection('evacuation_plans').doc(docId).update(data);
+  Future<void> _getUserRole() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      if (mounted) {
+        setState(() {
+          userRole = doc.data()?['role'];
+          isLoading = false;
+        });
+      }
     }
-    _titleController.clear(); _rowFieldController.clear(); _columnFieldController.clear();
-    if (mounted) Navigator.pop(context);
   }
 
-  // --- GLASS FORM ---
-  void _showForm({String? docId, String? title, String? row, String? col}) {
-    if (docId != null) {
-      _titleController.text = title!; _rowFieldController.text = row!; _columnFieldController.text = col!;
+  // --- CRUD OPERATIONS ---
+  Future<void> _addEvac() async {
+    if (_nameController.text.isEmpty || _addressController.text.isEmpty) return;
+    await FirebaseFirestore.instance.collection('evacuations').add({
+      'name': _nameController.text,
+      'address': _addressController.text,
+      'capacity': _capacityController.text.isEmpty ? 'Not Specified' : _capacityController.text,
+      'status': selectedStatus,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    _nameController.clear();
+    _addressController.clear();
+    _capacityController.clear();
+    FocusScope.of(context).unfocus();
+  }
+
+  Future<void> _openMaps(String name) async {
+    final String query = Uri.encodeComponent(name);
+    final String googleMapsUrl = "https://www.google.com/maps/search/?api=1&query=$query";
+    if (await canLaunchUrl(Uri.parse(googleMapsUrl))) {
+      await launchUrl(Uri.parse(googleMapsUrl));
     }
+  }
+
+  void _showEditSheet(String docId, Map<String, dynamic> data) {
+    final eName = TextEditingController(text: data['name']);
+    final eAddress = TextEditingController(text: data['address']);
+    final eCapacity = TextEditingController(text: data['capacity']);
+    String eStatus = data['status'];
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-            border: Border.all(color: Colors.white.withOpacity(0.2)),
-          ),
-          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom + 20, left: 20, right: 20, top: 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(docId == null ? "Add Plan" : "Edit Plan", style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-              TextField(controller: _titleController, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Title", labelStyle: TextStyle(color: Colors.white54))),
-              TextField(controller: _rowFieldController, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Location", labelStyle: TextStyle(color: Colors.white54))),
-              TextField(controller: _columnFieldController, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Instructions", labelStyle: TextStyle(color: Colors.white54))),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+                top: 20,
+                left: 20,
+                right: 20),
+            decoration: BoxDecoration(
+                color: const Color(0xFF0F172A).withOpacity(0.9),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(30))),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              _buildTextField(eName, "Center Name", Icons.home_work),
+              const SizedBox(height: 10),
+              _buildTextField(eAddress, "Full Address", Icons.location_on),
+              const SizedBox(height: 10),
+              _buildTextField(eCapacity, "Capacity", Icons.people),
+              const SizedBox(height: 15),
+              DropdownButton<String>(
+                value: eStatus,
+                dropdownColor: const Color(0xFF1E293B),
+                style: const TextStyle(color: Colors.white),
+                items: ["Available", "Full", "Warning"]
+                    .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                    .toList(),
+                onChanged: (val) => setModalState(() => eStatus = val!),
+              ),
               const SizedBox(height: 20),
-              ElevatedButton(onPressed: () => _saveData(docId: docId), child: const Text("SAVE DATA")),
-            ],
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    FirebaseFirestore.instance.collection('evacuations').doc(docId).update({
+                      'name': eName.text,
+                      'address': eAddress.text,
+                      'capacity': eCapacity.text,
+                      'status': eStatus
+                    });
+                    Navigator.pop(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.greenAccent, foregroundColor: Colors.black),
+                  child: const Text("UPDATE CENTER"),
+                ),
+              ),
+              const SizedBox(height: 30),
+            ]),
           ),
         ),
       ),
-    ).then((_) {
-      _titleController.clear(); _rowFieldController.clear(); _columnFieldController.clear();
-    });
-  }
-
-  Widget glassPostCard(String docId, String title, String location, String instructions) {
-    return AnimatedBuilder(
-      animation: _shimmerController,
-      builder: (context, child) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(width: 1.5, color: Colors.white.withOpacity(0.4)),
-              gradient: LinearGradient(
-                begin: Alignment(-2.0 + (_shimmerController.value * 4), -1.0),
-                end: Alignment(-1.0 + (_shimmerController.value * 4), 1.0),
-                colors: [Colors.transparent, Colors.white.withOpacity(0.1), Colors.transparent],
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Container(width: 40, height: 3, decoration: BoxDecoration(color: Colors.white54, borderRadius: BorderRadius.circular(10))),
-                      Row(
-                        children: [
-                          IconButton(icon: const Icon(Icons.edit, color: Colors.white70, size: 18), onPressed: () => _showForm(docId: docId, title: title, row: location, col: instructions)),
-                          IconButton(icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18), onPressed: () => _deletePost(docId)),
-                        ],
-                      ),
-                    ],
-                  ),
-                  Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
-                  const Divider(color: Colors.white12),
-                  Text("📍 $location", style: const TextStyle(color: Colors.white70)),
-                  const SizedBox(height: 8),
-                  Text(instructions, style: TextStyle(color: Colors.white.withOpacity(0.6))),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final double topPadding = MediaQuery.of(context).padding.top + kToolbarHeight;
-
+    bool isAdmin = userRole == 'admin';
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: const Color(0xFF020617),
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text("Evacuation Centers", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        title: const Text("EVACUATION CENTERS",
+            style: TextStyle(
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+                fontSize: 16,
+                letterSpacing: 2)),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        centerTitle: true,
+        leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+            onPressed: () => Navigator.pop(context)),
       ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          // Initialize FAB position to bottom right on first load
-          if (!_isFABInitialized) {
-            _fabPosition = Offset(constraints.maxWidth - 80, constraints.maxHeight - 100);
-            _isFABInitialized = true;
-          }
-
-          return Stack(
-            children: [
-              // Main Content
-              Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0xFF0D1B1E), Color(0xFF000000)],
-                  ),
-                ),
-                child: StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance.collection('evacuation_plans').orderBy('timestamp', descending: true).snapshots(),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Colors.greenAccent));
-                    return ListView.builder(
-                      padding: EdgeInsets.only(top: topPadding + 20, bottom: 100),
-                      itemCount: snapshot.data!.docs.length,
-                      itemBuilder: (context, index) {
-                        var d = snapshot.data!.docs[index];
-                        return glassPostCard(d.id, d['title'], d['row_data'], d['column_data']);
-                      },
-                    );
-                  },
-                ),
-              ),
-
-              // MOVEABLE SHINING GLASS FAB
-              Positioned(
-                left: _fabPosition.dx,
-                top: _fabPosition.dy,
-                child: Draggable(
-                  feedback: _buildUnifiedGlassFAB(),
-                  childWhenDragging: Container(),
-                  onDragEnd: (details) {
-                    setState(() {
-                      // Clamp limits so it doesn't go off-screen or hide behind AppBar
-                      double newX = details.offset.dx.clamp(10.0, constraints.maxWidth - 70.0);
-                      double newY = details.offset.dy.clamp(topPadding, constraints.maxHeight - 80.0);
-                      _fabPosition = Offset(newX, newY);
-                    });
-                  },
-                  child: _buildUnifiedGlassFAB(),
-                ),
-              ),
-            ],
-          );
-        },
+      body: Stack(
+        children: [
+          _buildBackgroundGlows(),
+          isLoading
+              ? const Center(child: CircularProgressIndicator(color: Colors.greenAccent))
+              : SafeArea(
+            child: Column(children: [
+              _buildSearchBar(),
+              if (isAdmin) _buildAdminInput(),
+              Expanded(child: _buildEvacList(isAdmin)),
+            ]),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildUnifiedGlassFAB() {
-    return Material(
-      color: Colors.transparent,
-      child: GestureDetector(
-        onTap: () => _showForm(),
-        child: Container(
-          width: 56, height: 56,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white.withOpacity(0.5), width: 1.5),
-            color: Colors.white.withOpacity(0.1),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.white.withOpacity(0.1),
-                blurRadius: 15,
-                spreadRadius: 1,
-              )
-            ],
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: _buildGlassBox(
+        child: TextField(
+          controller: _searchController,
+          onChanged: (val) => setState(() => searchQuery = val.toLowerCase()),
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            hintText: "Search safe zones...",
+            hintStyle: TextStyle(color: Colors.white24),
+            border: InputBorder.none,
+            prefixIcon: Icon(Icons.search, color: Colors.greenAccent),
           ),
-          child: const Icon(Icons.add, color: Colors.white, size: 28),
         ),
       ),
     );
   }
+
+  Widget _buildAdminInput() {
+    return _buildGlassBox(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text("ADMIN: ADD CENTER",
+            style: TextStyle(
+                color: Colors.greenAccent,
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.5)),
+        const SizedBox(height: 15),
+        _buildTextField(_nameController, "Center Name", Icons.business),
+        const SizedBox(height: 10),
+        _buildTextField(_addressController, "Address", Icons.map),
+        const SizedBox(height: 10),
+        _buildTextField(_capacityController, "Capacity", Icons.bolt),
+        const SizedBox(height: 15),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _addEvac,
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.greenAccent,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            child: const Text("SAVE CENTER",
+                style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          ),
+        )
+      ]),
+    );
+  }
+
+  Widget _buildEvacList(bool isAdmin) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('evacuations')
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        var docs = snapshot.data!.docs.where((doc) {
+          var d = doc.data() as Map<String, dynamic>;
+          return d['name'].toString().toLowerCase().contains(searchQuery) ||
+              d['address'].toString().toLowerCase().contains(searchQuery);
+        }).toList();
+
+        return ListView.builder(
+          itemCount: docs.length,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemBuilder: (context, index) {
+            var data = docs[index].data() as Map<String, dynamic>;
+            var id = docs[index].id;
+            Color statusColor = data['status'] == "Full"
+                ? Colors.redAccent
+                : (data['status'] == "Warning" ? Colors.orangeAccent : Colors.greenAccent);
+
+            return _buildGlassBox(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(15),
+              child: Column(children: [
+                Row(children: [
+                  Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle)),
+                  const SizedBox(width: 8),
+                  Text(data['status'].toString().toUpperCase(),
+                      style: TextStyle(
+                          color: statusColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  if (isAdmin) ...[
+                    IconButton(
+                        icon: const Icon(Icons.edit, color: Colors.white24, size: 18),
+                        onPressed: () => _showEditSheet(id, data)),
+                    IconButton(
+                        icon: Icon(Icons.delete,
+                            color: Colors.red.withOpacity(0.5), size: 18),
+                        onPressed: () => docs[index].reference.delete()),
+                  ]
+                ]),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(data['name'] ?? 'Unknown',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  subtitle: Text(data['address'] ?? 'No Address',
+                      style: const TextStyle(color: Colors.white38, fontSize: 12)),
+                  trailing: IconButton(
+                      icon: const Icon(Icons.directions, color: Colors.greenAccent, size: 28),
+                      onPressed: () => _openMaps(data['name'])),
+                ),
+                const Divider(color: Colors.white10),
+                Row(children: [
+                  const Icon(Icons.people_outline, color: Colors.white38, size: 14),
+                  const SizedBox(width: 5),
+                  Text("Capacity: ${data['capacity']}",
+                      style: const TextStyle(color: Colors.white38, fontSize: 11)),
+                ])
+              ]),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildGlassBox({required Widget child, EdgeInsets? margin, EdgeInsets? padding}) {
+    return Container(
+      margin: margin,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Container(
+            padding: padding,
+            decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white.withOpacity(0.1))),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField(TextEditingController ctrl, String lbl, IconData icon) {
+    return TextField(
+      controller: ctrl,
+      style: const TextStyle(color: Colors.white, fontSize: 14),
+      decoration: InputDecoration(
+        prefixIcon: Icon(icon, color: Colors.greenAccent, size: 18),
+        labelText: lbl,
+        labelStyle: const TextStyle(color: Colors.white38),
+        filled: true,
+        fillColor: Colors.black.withOpacity(0.2),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Colors.white10)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Colors.greenAccent)),
+      ),
+    );
+  }
+
+  Widget _buildBackgroundGlows() {
+    return Stack(children: [
+      Positioned(top: -100, left: -50, child: _glow(Colors.greenAccent.withOpacity(0.12))),
+      Positioned(bottom: -100, right: -50, child: _glow(Colors.blueAccent.withOpacity(0.08))),
+    ]);
+  }
+
+  Widget _glow(Color color) => Container(
+      width: 400,
+      height: 400,
+      decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          boxShadow: [BoxShadow(color: color, blurRadius: 150, spreadRadius: 50)]));
 }

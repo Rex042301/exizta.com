@@ -1,6 +1,7 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:ui';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class EmergencyPage extends StatefulWidget {
   const EmergencyPage({super.key});
@@ -10,221 +11,91 @@ class EmergencyPage extends StatefulWidget {
 }
 
 class _EmergencyPageState extends State<EmergencyPage> with SingleTickerProviderStateMixin {
-  late AnimationController _shimmerController;
-  final TextEditingController _typeController = TextEditingController();
-  final TextEditingController _contactController = TextEditingController();
-  final TextEditingController _descController = TextEditingController();
+  late AnimationController _sosController;
+  final TextEditingController _reportController = TextEditingController();
 
-  // Position variables for the Moveable FAB
-  Offset _fabPosition = const Offset(300, 600); // Default starting position
+  String? userRole;
+  bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _shimmerController = AnimationController(
+    _getUserRole();
+    _sosController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 3),
-    )..repeat();
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
   }
 
   @override
   void dispose() {
-    _shimmerController.dispose();
-    _typeController.dispose();
-    _contactController.dispose();
-    _descController.dispose();
+    _sosController.dispose();
+    _reportController.dispose();
     super.dispose();
   }
 
-  // --- CRUD LOGIC ---
-  Future<void> _saveEmergency({String? docId}) async {
-    if (_typeController.text.isEmpty) return;
-    final data = {
-      'type': _typeController.text,
-      'contact': _contactController.text,
-      'description': _descController.text,
+  Future<void> _getUserRole() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      if (mounted) {
+        setState(() {
+          userRole = doc.data()?['role'];
+          isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _submitSOS() async {
+    final user = FirebaseAuth.instance.currentUser;
+    await FirebaseFirestore.instance.collection('emergencies').add({
+      'userId': user?.uid,
+      'userEmail': user?.email,
+      'type': 'CRITICAL SOS',
+      'message': 'Manual SOS Triggered',
       'timestamp': FieldValue.serverTimestamp(),
-    };
-    if (docId == null) {
-      await FirebaseFirestore.instance.collection('emergency_contacts').add(data);
-    } else {
-      await FirebaseFirestore.instance.collection('emergency_contacts').doc(docId).update(data);
-    }
-    _typeController.clear(); _contactController.clear(); _descController.clear();
-    if (mounted) Navigator.pop(context);
-  }
+      'status': 'PENDING',
+    });
 
-  Future<void> _deleteEmergency(String docId) async {
-    bool confirm = await showGeneralDialog<bool>(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: '',
-      barrierColor: Colors.black54,
-      pageBuilder: (context, anim1, anim2) {
-        return Center(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 40),
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.white.withOpacity(0.3)),
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.delete_forever, color: Colors.redAccent, size: 40),
-                    const SizedBox(height: 16),
-                    const Text("Delete Info?", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 24),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("CANCEL", style: TextStyle(color: Colors.white54))),
-                        ElevatedButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent.withOpacity(0.3)),
-                          child: const Text("DELETE"),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    ) ?? false;
-    if (confirm) await FirebaseFirestore.instance.collection('emergency_contacts').doc(docId).delete();
-  }
-
-  // --- GLASS FORM ---
-  void _showForm({String? docId, String? type, String? contact, String? desc}) {
-    if (docId != null) {
-      _typeController.text = type!; _contactController.text = contact!; _descController.text = desc!;
-    }
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-            border: Border.all(color: Colors.white.withOpacity(0.2)),
-          ),
-          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom + 20, left: 20, right: 20, top: 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(docId == null ? "Add Emergency" : "Edit Emergency", style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-              TextField(controller: _typeController, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Service Type", labelStyle: TextStyle(color: Colors.white54))),
-              TextField(controller: _contactController, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Hotline", labelStyle: TextStyle(color: Colors.white54))),
-              TextField(controller: _descController, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Notes", labelStyle: TextStyle(color: Colors.white54))),
-              const SizedBox(height: 20),
-              ElevatedButton(onPressed: () => _saveEmergency(docId: docId), child: const Text("SAVE")),
-            ],
-          ),
-        ),
-      ),
-    ).then((_) { _typeController.clear(); _contactController.clear(); _descController.clear(); });
-  }
-
-  Widget glassCard(String docId, String type, String contact, String desc) {
-    return AnimatedBuilder(
-      animation: _shimmerController,
-      builder: (context, child) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(width: 1.5, color: Colors.white.withOpacity(0.4)),
-              gradient: LinearGradient(
-                begin: Alignment(-2.0 + (_shimmerController.value * 4), -1.0),
-                end: Alignment(-1.0 + (_shimmerController.value * 4), 1.0),
-                colors: [Colors.transparent, Colors.white.withOpacity(0.1), Colors.transparent],
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Icon(Icons.emergency, color: Colors.redAccent),
-                      Row(
-                        children: [
-                          IconButton(icon: const Icon(Icons.edit_note, color: Colors.white70), onPressed: () => _showForm(docId: docId, type: type, contact: contact, desc: desc)),
-                          IconButton(icon: const Icon(Icons.delete_outline, color: Colors.redAccent), onPressed: () => _deleteEmergency(docId)),
-                        ],
-                      ),
-                    ],
-                  ),
-                  Text(type, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
-                  Text(contact, style: const TextStyle(color: Colors.redAccent, fontSize: 18, fontWeight: FontWeight.bold)),
-                  const Divider(color: Colors.white12),
-                  Text(desc, style: TextStyle(color: Colors.white.withOpacity(0.6))),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("SOS Sent! Help is on the way."), backgroundColor: Colors.redAccent),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    bool isAdmin = userRole == 'admin';
     return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(title: const Text("Emergency"), backgroundColor: Colors.transparent, elevation: 0),
+      backgroundColor: const Color(0xFF020617),
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        title: const Text("EMERGENCY HUB",
+            style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 16, letterSpacing: 4)),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+      ),
       body: Stack(
         children: [
-          // Background List
-          Container(
-            decoration: const BoxDecoration(gradient: LinearGradient(colors: [Color(0xFF1A0B0B), Colors.black], begin: Alignment.topCenter)),
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('emergency_contacts').orderBy('timestamp', descending: true).snapshots(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                return ListView.builder(
-                  padding: const EdgeInsets.only(top: 20, bottom: 100),
-                  itemCount: snapshot.data!.docs.length,
-                  itemBuilder: (context, index) {
-                    var d = snapshot.data!.docs[index];
-                    return glassCard(d.id, d['type'], d['contact'], d['description']);
-                  },
-                );
-              },
-            ),
-          ),
-
-          // MOVEABLE GLASS FAB
-          Positioned(
-            left: _fabPosition.dx,
-            top: _fabPosition.dy,
-            child: Draggable(
-              feedback: _buildFAB(),
-              childWhenDragging: Container(),
-              onDragEnd: (details) {
-                setState(() {
-                  // Snapping logic to keep it within view
-                  double x = details.offset.dx.clamp(20.0, MediaQuery.of(context).size.width - 80.0);
-                  double y = details.offset.dy.clamp(100.0, MediaQuery.of(context).size.height - 150.0);
-                  _fabPosition = Offset(x, y);
-                });
-              },
-              child: _buildFAB(),
+          _buildBackgroundGlows(),
+          SafeArea(
+            child: Column(
+              children: [
+                const SizedBox(height: 20),
+                _buildSOSButton(),
+                const SizedBox(height: 40),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text("ACTIVE INCIDENTS",
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Expanded(child: _buildIncidentList(isAdmin)),
+              ],
             ),
           ),
         ],
@@ -232,22 +103,115 @@ class _EmergencyPageState extends State<EmergencyPage> with SingleTickerProvider
     );
   }
 
-  Widget _buildFAB() {
-    return Material(
-      color: Colors.transparent,
-      child: GestureDetector(
-        onTap: () => _showForm(),
-        child: Container(
-          width: 56, height: 56,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white.withOpacity(0.5), width: 1.5),
-            color: Colors.white.withOpacity(0.05),
-            boxShadow: [BoxShadow(color: Colors.white10, blurRadius: 15)],
+  Widget _buildSOSButton() {
+    return GestureDetector(
+      onLongPress: _submitSOS,
+      child: Column(
+        children: [
+          AnimatedBuilder(
+            animation: _sosController,
+            builder: (context, child) {
+              return Container(
+                padding: const EdgeInsets.all(30),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.red.withOpacity(0.1),
+                  border: Border.all(color: Colors.redAccent.withOpacity(_sosController.value), width: 4),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.redAccent.withOpacity(0.2 * _sosController.value),
+                      blurRadius: 40,
+                      spreadRadius: 20 * _sosController.value,
+                    )
+                  ],
+                ),
+                child: Container(
+                  width: 120,
+                  height: 120,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(colors: [Colors.redAccent, Colors.red]),
+                  ),
+                  child: const Center(
+                    child: Text("SOS",
+                        style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900)),
+                  ),
+                ),
+              );
+            },
           ),
-          child: const Icon(Icons.add, color: Colors.white, size: 28),
+          const SizedBox(height: 15),
+          const Text("LONG PRESS TO SEND SOS",
+              style: TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIncidentList(bool isAdmin) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('emergencies').orderBy('timestamp', descending: true).snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Colors.redAccent));
+        var docs = snapshot.data!.docs;
+
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            var data = docs[index].data() as Map<String, dynamic>;
+            bool isResolved = data['status'] == 'RESOLVED';
+
+            return _buildGlassBox(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(15),
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.emergency_share_rounded, color: isResolved ? Colors.greenAccent : Colors.redAccent),
+                title: Text(data['userEmail'] ?? 'Anonymous',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                subtitle: Text("${data['type']} • ${data['status']}",
+                    style: TextStyle(color: isResolved ? Colors.greenAccent : Colors.redAccent.withOpacity(0.7), fontSize: 11)),
+                trailing: isAdmin ? IconButton(
+                  icon: const Icon(Icons.check_circle_outline, color: Colors.blueAccent),
+                  onPressed: () => docs[index].reference.update({'status': 'RESOLVED'}),
+                ) : null,
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // --- REUSABLE UI ---
+  Widget _buildGlassBox({required Widget child, EdgeInsets? margin, EdgeInsets? padding}) {
+    return Container(
+      margin: margin,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Container(
+            padding: padding,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withOpacity(0.1)),
+            ),
+            child: child,
+          ),
         ),
       ),
     );
   }
+
+  Widget _buildBackgroundGlows() {
+    return Stack(children: [
+      Positioned(top: -50, right: -50, child: _glow(Colors.redAccent.withOpacity(0.15))),
+      Positioned(bottom: -100, left: -50, child: _glow(Colors.orangeAccent.withOpacity(0.05))),
+    ]);
+  }
+
+  Widget _glow(Color color) => Container(width: 400, height: 400, decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: [BoxShadow(color: color, blurRadius: 150, spreadRadius: 50)]));
 }
